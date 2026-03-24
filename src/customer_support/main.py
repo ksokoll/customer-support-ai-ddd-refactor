@@ -26,10 +26,35 @@ _pipeline_instance: Pipeline | None = None
 
 
 def get_pipeline() -> Pipeline:
-    """Return the singleton Pipeline instance, constructing it on first call."""
+    """Return the singleton Pipeline instance, constructing it on first call.
+
+    Uses OpenAILLMClient and OpenAIEmbeddingClient when OPENAI_API_KEY is set.
+    Falls back to DummyClients for local development without credentials.
+    """
     global _pipeline_instance
     if _pipeline_instance is None:
-        _pipeline_instance = Pipeline()
+        if settings.openai_api_key:
+            from customer_support.services.client import (  # noqa: PLC0415
+                OpenAIEmbeddingClient,
+                OpenAILLMClient,
+            )
+            from customer_support.retrieval.retriever import FAISSRetriever  # noqa: PLC0415
+
+            llm_client = OpenAILLMClient()
+            embedding_client = OpenAIEmbeddingClient()
+            retriever = FAISSRetriever(
+                embedding_client=embedding_client,
+                vector_db_path=settings.vector_db_path,
+            )
+            _pipeline_instance = Pipeline(
+                llm_client=llm_client,
+                embedding_client=embedding_client,
+                retriever=retriever,
+            )
+            logger.info("Pipeline initialised with OpenAI clients")
+        else:
+            _pipeline_instance = Pipeline()
+            logger.warning("No OPENAI_API_KEY found — running with DummyClients")
     return _pipeline_instance
 
 

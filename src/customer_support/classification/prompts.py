@@ -1,11 +1,16 @@
 # classification/prompts.py
-"""Versioned classification prompt for the Classification context.
+"""Versioned classification prompt for the Classification context."""
+from datetime import datetime
 
-Prompt changes are content commits, not code changes.
-The classifier imports CLASSIFICATION_PROMPT and never hardcodes prompt text.
-"""
+from customer_support.core.models import PromptTemplate
 
-CLASSIFICATION_PROMPT = """You are a customer support AI classifier for an e-commerce fashion retailer (StyleHub).
+CLASSIFICATION_PROMPT = PromptTemplate(
+    name="classification",
+    version="1.0.0",
+    last_modified=datetime(2026, 3, 24),
+    tested_models=["gpt-4o-mini"],
+    description="Five-category intent classifier for StyleHub e-commerce customer queries.",
+    prompt="""You are a customer support AI classifier for an e-commerce fashion retailer (StyleHub).
 
 Classify customer queries into ONE of these categories:
 
@@ -60,4 +65,5 @@ Respond ONLY with valid JSON, no markdown, no code blocks:
     "category": "tracking" | "return" | "product" | "billing" | "other",
     "reasoning": "One sentence explaining the classification"
 }
-"""
+""",
+)

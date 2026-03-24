@@ -131,3 +131,113 @@ class DummyEmbeddingClient:
             List of zero-vectors, one per input text.
         """
         return [[0.0] * self._DIMENSIONS for _ in texts]
+
+
+# ── OpenAI implementations ────────────────────────────────────────────────────
+
+class OpenAILLMClient:
+    """Production LLM client wrapping the OpenAI Chat Completions API.
+
+    Args:
+        api_key: OpenAI API key. Reads from settings if not provided.
+        model: Model name. Reads from settings if not provided.
+    """
+
+    def __init__(
+        self,
+        api_key: str | None = None,
+        model: str | None = None,
+    ) -> None:
+        try:
+            from openai import OpenAI  # noqa: PLC0415
+        except ImportError as exc:
+            raise RuntimeError(
+                "openai package not installed. Run: pip install -e '.[openai]'"
+            ) from exc
+
+        from customer_support.core.config import settings  # noqa: PLC0415
+
+        self._client = OpenAI(api_key=api_key or settings.openai_api_key)
+        self._model = model or settings.llm_model_name
+
+    def complete(self, request: CompletionRequest) -> CompletionResult:
+        """Call the OpenAI Chat Completions API.
+
+        Args:
+            request: Typed completion parameters.
+
+        Returns:
+            CompletionResult with model response and token usage.
+
+        Raises:
+            RuntimeError: If the API call fails.
+        """
+        kwargs: dict = {
+            "model": self._model,
+            "messages": [
+                {"role": "system", "content": request.system},
+                {"role": "user", "content": request.user},
+            ],
+            "temperature": request.temperature,
+            "max_tokens": request.max_tokens,
+        }
+        if request.response_format:
+            kwargs["response_format"] = request.response_format
+
+        try:
+            response = self._client.chat.completions.create(**kwargs)
+        except Exception as exc:
+            raise RuntimeError(f"OpenAI API call failed: {exc}") from exc
+
+        content = response.choices[0].message.content or ""
+        tokens_used = response.usage.total_tokens if response.usage else 0
+
+        return CompletionResult(content=content, tokens_used=tokens_used)
+
+
+class OpenAIEmbeddingClient:
+    """Production embedding client wrapping the OpenAI Embeddings API.
+
+    Args:
+        api_key: OpenAI API key. Reads from settings if not provided.
+        model: Embedding model name. Reads from settings if not provided.
+    """
+
+    def __init__(
+        self,
+        api_key: str | None = None,
+        model: str | None = None,
+    ) -> None:
+        try:
+            from openai import OpenAI  # noqa: PLC0415
+        except ImportError as exc:
+            raise RuntimeError(
+                "openai package not installed. Run: pip install -e '.[openai]'"
+            ) from exc
+
+        from customer_support.core.config import settings  # noqa: PLC0415
+
+        self._client = OpenAI(api_key=api_key or settings.openai_api_key)
+        self._model = model or settings.embedding_model_name
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        """Generate embeddings via the OpenAI Embeddings API.
+
+        Args:
+            texts: List of strings to embed. Must not be empty.
+
+        Returns:
+            List of float vectors, one per input text.
+
+        Raises:
+            RuntimeError: If the API call fails.
+        """
+        try:
+            response = self._client.embeddings.create(
+                model=self._model,
+                input=texts,
+            )
+        except Exception as exc:
+            raise RuntimeError(f"OpenAI Embeddings API call failed: {exc}") from exc
+
+        return [item.embedding for item in response.data]

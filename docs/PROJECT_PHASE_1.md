@@ -1,5 +1,7 @@
 # Project Phase 1: Skeleton + Core + Services
 
+## Project Starting Date: March 23. 2026
+
 ## Goal
 
 Transfer everything covered by `AI_Project_Template_V3` into the refactored
@@ -360,13 +362,15 @@ strategy from `BOUNDED_CONTEXTS.md`. Adapt `main.py` from template.
 
 ## Phase 1 Complete: Definition of Done
 
-- [ ] Full folder structure with all `__init__.py` files
-- [ ] `pyproject.toml` with correct package name and all dependencies pinned
-- [ ] `make lint` passes (ruff + mypy)
-- [ ] `make test-unit` passes
-- [ ] `make test-integration` passes (DummyClients, no external calls)
-- [ ] `make run` starts server, `/health` returns 200
-- [ ] No `openai.OpenAI()` instantiation outside `services/client.py`
-- [ ] No `if settings.llm_provider` branching in any bounded context
-- [ ] `BOUNDED_CONTEXTS.md` and this file committed alongside the code
-- [ ] `DEVLOG.md` updated with session notes
+- [X] Full folder structure with all `__init__.py` files
+- [X] `pyproject.toml` with correct package name and all dependencies pinned
+- [X] `make lint` passes (ruff + mypy)
+- [X] `make test-unit` passes
+- [X] `make test-integration` passes (DummyClients, no external calls)
+- [X] `make run` starts server, `/health` returns 200
+- [X] No `openai.OpenAI()` instantiation outside `services/client.py`
+- [X] No `if settings.llm_provider` branching in any bounded context
+- [X] `BOUNDED_CONTEXTS.md` and this file committed alongside the code
+- [X] `DEVLOG.md` updated with session notes
+
+Phase 1 Completed on March 24. 2026

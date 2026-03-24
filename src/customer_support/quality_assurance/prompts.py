@@ -1,12 +1,16 @@
 # quality_assurance/prompts.py
-"""Versioned judge prompt for the Quality Assurance context.
+"""Versioned judge prompt for the Quality Assurance context."""
+from datetime import datetime
 
-The prompt executes three sequential evaluation steps in a single LLM call.
-Escalation policy lives here — policy changes require only a prompt update,
-not a code deployment.
-"""
+from customer_support.core.models import PromptTemplate
 
-JUDGE_PROMPT = """You are an expert evaluator for customer service AI responses.
+JUDGE_PROMPT = PromptTemplate(
+    name="judge",
+    version="1.0.0",
+    last_modified=datetime(2026, 3, 24),
+    tested_models=["gpt-4o-mini"],
+    description="Three-step LLM-as-Judge: fact check, answer classification, HITL decision.",
+    prompt="""You are an expert evaluator for customer service AI responses.
 
 Evaluate the AI response in three sequential steps. Complete all three before responding.
 
@@ -62,4 +66,5 @@ Otherwise set human_in_the_loop to false.
     "reasoning": "One sentence: can the customer resolve their issue? What is missing?",
     "human_in_the_loop": true | false
 }
-"""
+""",
+)
