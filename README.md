@@ -121,6 +121,25 @@ sequential LLM calls per request (coherence/hallucination check, answer classifi
 HITL decision). One structured three-step prompt replaces all three, reducing latency
 and cost per request by one round-trip.
 
+### Versioned Prompt Library
+
+Each prompt is defined as a typed `PromptTemplate` instance rather than a plain string constant.
+```python
+CLASSIFICATION_PROMPT = PromptTemplate(
+    name="classification",
+    version="1.0.0",
+    last_modified=datetime(2026, 3, 24),
+    tested_models=["gpt-4o-mini"],
+    description="Five-category intent classifier for StyleHub e-commerce queries.",
+    prompt="...",
+)
+```
+
+Prompt changes are content commits, not code changes — the classifier, generator, and judge
+each read `.prompt` from their respective template and never hardcode prompt text.
+The metadata answers the questions that matter in production: when was this last changed,
+and on which model was it validated?
+
 Full ADRs in `docs/decisions/`.
 
 ---
