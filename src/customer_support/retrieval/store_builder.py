@@ -20,9 +20,14 @@ import sys
 from pathlib import Path
 
 import faiss
-import numpy as np
 
 from customer_support.core.config import settings
+from customer_support.retrieval.retriever import (
+    _INDEX_FILENAME,
+    _TEXTS_FILENAME,
+    _build_faiss_index,
+    _parse_qa_line,
+)
 from customer_support.services.client import EmbeddingClient
 
 logger = logging.getLogger(__name__)
@@ -60,19 +65,12 @@ class StoreBuilder:
         logger.info("Loaded %d documents from %s", len(texts), self._kb_path)
 
         logger.info("Embedding %d documents...", len(texts))
-        try:
-            vectors = self._client.embed(texts)
-        except Exception as exc:
-            raise RuntimeError(f"Embedding failed: {exc}") from exc
-
-        matrix = np.array(vectors, dtype=np.float32)
-        dimension = matrix.shape[1]
-        index = faiss.IndexFlatL2(dimension)
-        index.add(matrix)
+        index = _build_faiss_index(texts, self._client)
+        dimension = index.d
 
         self._db_path.mkdir(parents=True, exist_ok=True)
-        faiss.write_index(index, str(self._db_path / "index.faiss"))
-        with open(self._db_path / "texts.json", "w", encoding="utf-8") as fh:
+        faiss.write_index(index, str(self._db_path / _INDEX_FILENAME))
+        with open(self._db_path / _TEXTS_FILENAME, "w", encoding="utf-8") as fh:
             json.dump(texts, fh, ensure_ascii=False, indent=2)
 
         logger.info(
@@ -104,8 +102,7 @@ class StoreBuilder:
                 if not line:
                     continue
                 try:
-                    qa = json.loads(line)
-                    texts.append(f"Q: {qa['query']}\nA: {qa['gold_answer']}")
+                    texts.append(_parse_qa_line(line))
                 except (json.JSONDecodeError, KeyError) as exc:
                     logger.warning("Skipping line %d: %s", lineno, exc)
 
@@ -120,23 +117,8 @@ class StoreBuilder:
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
-    # Import here to avoid making openai a hard dependency of this module
     try:
-        from openai import OpenAI  # noqa: PLC0415
-
-        class OpenAIEmbeddingClient:
-            """Thin wrapper around OpenAI's embedding endpoint."""
-
-            def __init__(self) -> None:
-                self._client = OpenAI(api_key=settings.openai_api_key)
-
-            def embed(self, texts: list[str]) -> list[list[float]]:
-                response = self._client.embeddings.create(
-                    model=settings.embedding_model_name,
-                    input=texts,
-                )
-                return [item.embedding for item in response.data]
-
+        from customer_support.services.client import OpenAIEmbeddingClient  # noqa: PLC0415
         embedding_client: EmbeddingClient = OpenAIEmbeddingClient()
     except ImportError:
         logger.error("openai package not installed. Run: pip install -e '.[openai]'")

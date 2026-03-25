@@ -12,7 +12,6 @@ from customer_support.core.exceptions import QualityAssuranceError
 from customer_support.quality_assurance.checker import check_coherence, check_length
 from customer_support.quality_assurance.judge import AnswerJudge, QualityChecker
 from customer_support.quality_assurance.models import QualityResult
-
 from tests.conftest import FailingLLMClient, StubLLMClient
 
 

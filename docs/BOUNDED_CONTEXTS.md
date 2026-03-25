@@ -301,3 +301,27 @@ Rules for new contexts:
 4. `LLMClient` and `EmbeddingClient` are the only approved ways to call
    any AI provider. New contexts must not introduce direct API client
    imports.
+
+
+  ## Fitness Functions
+
+Automated checks that verify architectural characteristics are treated
+as first-class artifacts:
+
+| Check | Type | Enforces |
+|---|---|---|
+| Import boundary test: `classification/` does not import from `generation/` | Unit | Boundary rules |
+| `FAISSRetriever` and `BlobRetriever` satisfy `RetrieverProtocol` | Unit | Protocol contract |
+| `DummyLLMClient` satisfies `LLMClient` Protocol | Unit | Protocol contract |
+| `DummyEmbeddingClient` satisfies `EmbeddingClient` Protocol | Unit | Protocol contract |
+| `OpenAILLMClient` satisfies `LLMClient` Protocol | Unit | Production client contract |
+| `OpenAIEmbeddingClient` satisfies `EmbeddingClient` Protocol | Unit | Production client contract |
+| `PipelineResult` accepts typed outputs from all four contexts | Unit | Exit contract |
+| `store_builder.py` and `retriever.py` use the same embedding model name | Config | Embedding skew prevention |
+| `RetrievalError` does not crash pipeline | Integration | Graceful degradation |
+| `ClassificationError` falls back to category `"other"` | Integration | Fallback behaviour |
+| `GenerationError` propagates to caller | Integration | Hard failure contract |
+| `QualityAssuranceError` sets `human_in_the_loop=True` | Integration | Fail-safe behaviour |
+| Pipeline with missing index uses `_EmptyRetriever` fallback | Integration | Startup resilience |
+| Docker container starts cleanly with all required env vars | Smoke | Deployment readiness |
+| `GET /health` returns 200 without OpenAI API key | Smoke | Availability |

@@ -1,8 +1,8 @@
 # generation/generator.py
 """Generation context: grounded response generation from retrieved context."""
 
+import json
 import logging
-import re
 
 from customer_support.core.config import settings
 from customer_support.core.exceptions import GenerationError
@@ -40,26 +40,25 @@ class ResponseGenerator:
         Args:
             query: Raw customer query string.
             category: Intent category string from the Classification context.
-                The pipeline extracts this from IntentClassification before
-                passing it here, keeping generation free of cross-context imports.
             context_docs: Retrieved document strings from the Retrieval
                 context, ordered by relevance.
 
         Returns:
-            GeneratorResult with the answer, extracted source citations,
+            GeneratorResult with the answer, source indices used,
             and token usage.
 
         Raises:
-            GenerationError: If the LLM call fails or returns an empty
-                response.
+            GenerationError: If the LLM call fails, returns empty content,
+                or returns malformed JSON.
         """
         user_prompt = self._build_prompt(query, category, context_docs)
 
         request = CompletionRequest(
-            system=GENERATION_PROMPT,
+            system=GENERATION_PROMPT.prompt,
             user=user_prompt,
             temperature=settings.temperature_default,
             max_tokens=settings.max_tokens,
+            response_format={"type": "json_object"},
         )
 
         try:
@@ -72,8 +71,18 @@ class ResponseGenerator:
         if not result.content or not result.content.strip():
             raise GenerationError("LLM returned an empty response.")
 
-        answer = result.content.strip()
-        sources = self._extract_citations(answer)
+        try:
+            parsed = json.loads(result.content)
+        except json.JSONDecodeError as exc:
+            raise GenerationError(
+                f"Generation response is not valid JSON: {result.content!r}"
+            ) from exc
+
+        answer = parsed.get("answer", "").strip()
+        if not answer:
+            raise GenerationError("Generation response missing 'answer' field.")
+
+        sources: list[int] = parsed.get("sources_used", [])
 
         logger.info(
             "Response generated",
@@ -91,8 +100,8 @@ class ResponseGenerator:
             tokens_used=result.tokens_used,
         )
 
+    @staticmethod
     def _build_prompt(
-        self,
         query: str,
         category: str,
         context_docs: list[str],
@@ -107,7 +116,7 @@ class ResponseGenerator:
         Returns:
             Formatted user prompt string.
         """
-        context_block = self._format_context(context_docs)
+        context_block = _format_context(context_docs)
         return (
             f"Customer Query: {query}\n"
             f"Category: {category}\n\n"
@@ -115,39 +124,16 @@ class ResponseGenerator:
             "Generate a helpful response following the tone guidelines."
         )
 
-    @staticmethod
-    def _format_context(docs: list[str]) -> str:
-        """Format context documents with numbered source markers.
 
-        Args:
-            docs: List of document strings.
+def _format_context(docs: list[str]) -> str:
+    """Format context documents with numbered source markers.
 
-        Returns:
-            Formatted string with [Source N] headers per document.
-        """
-        if not docs:
-            return "(No context available)"
-        return "\n".join(f"[Source {i}]\n{doc}" for i, doc in enumerate(docs, start=1))
+    Args:
+        docs: List of document strings.
 
-    @staticmethod
-    def _extract_citations(text: str) -> list[str]:
-        """Extract [Source: N] citation markers from a response string.
-
-        Pure string operation — no LLM call.
-
-        Args:
-            text: Generated response text.
-
-        Returns:
-            Deduplicated list of citation strings found in the text,
-            e.g. ["Source 1", "Source 2"].
-        """
-        matches = re.findall(r"\[Source:?\s*(\d+)\]", text, re.IGNORECASE)
-        seen: set[str] = set()
-        citations: list[str] = []
-        for m in matches:
-            key = f"Source {m}"
-            if key not in seen:
-                seen.add(key)
-                citations.append(key)
-        return citations
+    Returns:
+        Formatted string with [Source N] headers per document.
+    """
+    if not docs:
+        return "(No context available)"
+    return "\n".join(f"[Source {i}]\n{doc}" for i, doc in enumerate(docs, start=1))

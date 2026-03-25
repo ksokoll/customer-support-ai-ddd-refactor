@@ -34,11 +34,11 @@ def get_pipeline() -> Pipeline:
     global _pipeline_instance
     if _pipeline_instance is None:
         if settings.openai_api_key:
+            from customer_support.retrieval.retriever import FAISSRetriever  # noqa: PLC0415
             from customer_support.services.client import (  # noqa: PLC0415
                 OpenAIEmbeddingClient,
                 OpenAILLMClient,
             )
-            from customer_support.retrieval.retriever import FAISSRetriever  # noqa: PLC0415
 
             llm_client = OpenAILLMClient()
             embedding_client = OpenAIEmbeddingClient()

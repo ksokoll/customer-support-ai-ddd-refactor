@@ -69,11 +69,11 @@ class AnswerJudge:
         )
 
         request = CompletionRequest(
-            system=JUDGE_PROMPT,
+            system=JUDGE_PROMPT.prompt,
             user=user_prompt,
             temperature=settings.temperature_judge,
             response_format={"type": "json_object"},
-            max_tokens=400,
+            max_tokens=settings.max_tokens_judge,
         )
 
         try:
@@ -191,7 +191,7 @@ class QualityChecker:
         """
         score = 0.0
         if coherence_passed:
-            score += 0.7
+            score += settings.confidence_weight_coherence
         if length_passed:
-            score += 0.3
+            score += settings.confidence_weight_length
         return round(score, 2)

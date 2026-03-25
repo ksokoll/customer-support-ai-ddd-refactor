@@ -73,3 +73,33 @@ file is created is cheaper than refactoring context boundaries mid-migration.
 **Solution:** Replaced with direct `faiss-cpu` calls. The text-to-index mapping problem (FAISS returns integers, not strings) is solved with a parallel `list[str]` serialized as `texts.json` alongside the index file. Total: ~60 lines, no adapter, full Protocol injection, measurably smaller image.
 
 **Takeaway:** If you are writing glue code to satisfy a dependency's interface rather than to solve a domain problem, that dependency is costing more than it provides.
+
+## RAG Refactor: Code Quality Pass
+
+### Green tests confirm behaviour — ownership walkthroughs confirm architecture (25.03.2026)
+
+**Context:** Phase 1 was complete, all 60 tests green, lint clean, smoke test successful.
+Systematic ownership walkthrough across all production files to find issues no test would
+catch.
+
+**Problem:** Ten issues across four categories. Magic Numbers: `max_tokens=400`, word
+count boundaries, sentence minimum, and confidence weights were all hardcoded inline or
+in module constants instead of `config.py`. Connascence of Algorithm: JSONL parsing
+(`f"Q: {qa['query']}\nA: {qa['gold_answer']}"`) and FAISS index construction existed
+identically in both `retriever.py` and `store_builder.py` — silent drift risk if one
+changes. Structural: `BlobRetriever` validated config and checked the Azure import inside
+`_build_from_blob`, meaning the class could be instantiated with invalid config and only
+fail on first use. Output contract: `GeneratorResult.sources` was `list[str]` with
+formatted strings like `"Source 1"` — the generator received clean integers and
+immediately threw away the type information.
+
+**Solution:** Config received six new fields for all tuneable quality thresholds.
+Shared functions `_parse_qa_line`, `_parse_jsonl`, and `_build_faiss_index` extracted in
+`retriever.py` and imported by `store_builder.py` — one place for each algorithm.
+`BlobRetriever.__init__` now validates config and checks the import, failing fast before
+any work starts. `except Exception` on blob download replaced with `except AzureError`.
+`GeneratorResult.sources` changed to `list[int]`; formatting to `"Source 1"` belongs in
+the presentation layer, not the domain model.
+
+**Takeaway:** Write the ownership walkthrough into the Definition of Done and run it before
+every push, not just once after the first smoke test.

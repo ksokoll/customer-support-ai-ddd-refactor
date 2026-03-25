@@ -10,6 +10,8 @@ is handled by AnswerJudge in judge.py via a single LLM call.
 
 import re
 
+from customer_support.core.config import settings
+
 
 def check_coherence(answer: str) -> dict[str, object]:
     """Check whether a response is coherent and minimally well-structured.
@@ -32,7 +34,7 @@ def check_coherence(answer: str) -> dict[str, object]:
 
     sentences = [s.strip() for s in re.split(r"[.!?]+", answer) if s.strip()]
 
-    if len(sentences) < 2:
+    if len(sentences) < settings.min_response_sentences:
         issues.append("Response is too short or lacks sentence structure.")
 
     if len(sentences) != len(set(sentences)):
@@ -55,18 +57,24 @@ def check_length(answer: str) -> dict[str, object]:
     """
     word_count = len(answer.split())
 
-    if word_count < 20:
+    if word_count < settings.min_response_words:
         return {
             "passed": False,
             "word_count": word_count,
-            "issue": f"Response too short ({word_count} words, minimum 20).",
+            "issue": (
+                f"Response too short "
+                f"({word_count} words, minimum {settings.min_response_words})."
+            ),
         }
 
-    if word_count > 200:
+    if word_count > settings.max_response_words:
         return {
             "passed": False,
             "word_count": word_count,
-            "issue": f"Response too long ({word_count} words, maximum 200).",
+            "issue": (
+                f"Response too long "
+                f"({word_count} words, maximum {settings.max_response_words})."
+            ),
         }
 
     return {"passed": True, "word_count": word_count, "issue": None}

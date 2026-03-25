@@ -18,7 +18,6 @@ from customer_support.retrieval.retriever import (
 )
 from customer_support.services.client import DummyEmbeddingClient
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
 DUMMY_TEXTS = [

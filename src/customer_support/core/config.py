@@ -26,6 +26,15 @@ class Settings(BaseSettings):
     temperature_default: float = Field(default=0.3)
     temperature_judge: float = Field(default=0.0)
     max_tokens: int = Field(default=500)
+    max_tokens_classification: int = Field(default=150)
+    max_tokens_judge: int = Field(default=400)
+
+    # Quality assurance thresholds
+    min_response_words: int = Field(default=20)
+    max_response_words: int = Field(default=200)
+    min_response_sentences: int = Field(default=2)
+    confidence_weight_coherence: float = Field(default=0.7)
+    confidence_weight_length: float = Field(default=0.3)
 
     # Input validation
     min_query_length: int = Field(default=10)

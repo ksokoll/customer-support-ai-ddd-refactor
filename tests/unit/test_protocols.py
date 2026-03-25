@@ -13,6 +13,8 @@ from customer_support.services.client import (
     DummyLLMClient,
     EmbeddingClient,
     LLMClient,
+    OpenAIEmbeddingClient,
+    OpenAILLMClient,
 )
 
 
@@ -31,6 +33,11 @@ class TestLLMClientProtocol:
         client = DummyLLMClient()
         result = client.complete(CompletionRequest(system="sys", user="test query"))
         assert "test query" in result.content
+
+    def test_openai_llm_client_satisfies_protocol(self) -> None:
+        # Protocol check only — no API call. isinstance() verifies structural
+        # compatibility (method name + signature), not behaviour.
+        assert isinstance(OpenAILLMClient(api_key="dummy"), LLMClient)
 
 
 @pytest.mark.unit
@@ -52,3 +59,7 @@ class TestEmbeddingClientProtocol:
         client = DummyEmbeddingClient()
         result = client.embed(["foo"])
         assert all(v == 0.0 for v in result[0])
+
+    def test_openai_embedding_client_satisfies_protocol(self) -> None:
+        # Protocol check only — no API call.
+        assert isinstance(OpenAIEmbeddingClient(api_key="dummy"), EmbeddingClient)

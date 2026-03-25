@@ -1,5 +1,11 @@
 # classification/prompts.py
-"""Versioned classification prompt for the Classification context."""
+"""Versioned classification prompt for the Classification context.
+
+Just as in the models.py file, the category definitions are purposely hardcoded 
+in the prompt rather than loaded from a registry or config to reduce complexity for this demo. 
+In a production system, a category registry should be used with dynamic appended IntentCategories
+to the prompt."""
+
 from datetime import datetime
 
 from customer_support.core.models import PromptTemplate
@@ -60,10 +66,6 @@ Classify customer queries into ONE of these categories:
 - Order status or processing -> always "tracking"
 
 **OUTPUT FORMAT:**
-Respond ONLY with valid JSON, no markdown, no code blocks:
-{
-    "category": "tracking" | "return" | "product" | "billing" | "other",
-    "reasoning": "One sentence explaining the classification"
-}
+Respond only with a JSON object containing "category" and "reasoning".
 """,
 )

@@ -6,9 +6,7 @@ import pytest
 from customer_support.classification.classifier import IntentClassifier
 from customer_support.classification.models import IntentClassification
 from customer_support.core.exceptions import ClassificationError
-
 from tests.conftest import FailingLLMClient, MalformedLLMClient, StubLLMClient
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 

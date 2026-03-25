@@ -1,17 +1,14 @@
 # tests/unit/test_generator.py
 """Unit tests for the Generation context."""
 
+import json
+
 import pytest
 
 from customer_support.core.exceptions import GenerationError
 from customer_support.generation.generator import ResponseGenerator
 from customer_support.generation.models import GeneratorResult
-from customer_support.services.client import CompletionRequest, CompletionResult
-
 from tests.conftest import EmptyLLMClient, FailingLLMClient, StubLLMClient
-
-
-# ── Fixtures ──────────────────────────────────────────────────────────────────
 
 CATEGORY = "tracking"
 CONTEXT_DOCS = [
@@ -19,17 +16,16 @@ CONTEXT_DOCS = [
     "Q: How long does shipping take?\nA: Standard shipping takes 3-5 days.",
 ]
 
+_VALID_RESPONSE = json.dumps({
+    "answer": "Your order is on its way. Visit My Orders for details. Thank you.",
+    "sources_used": [1],
+})
+
 
 @pytest.fixture()
 def generator() -> ResponseGenerator:
-    return ResponseGenerator(
-        client=StubLLMClient(
-            content="Your order is on its way. Visit My Orders for details. [Source: 1] Thank you."
-        )
-    )
+    return ResponseGenerator(client=StubLLMClient(content=_VALID_RESPONSE))
 
-
-# ── Tests ─────────────────────────────────────────────────────────────────────
 
 @pytest.mark.unit
 class TestResponseGeneratorReturnsResult:
@@ -45,9 +41,29 @@ class TestResponseGeneratorReturnsResult:
         result = generator.generate("where is my order?", CATEGORY, CONTEXT_DOCS)
         assert result.answer
 
+    def test_generate_result_sources_from_json(self) -> None:
+        gen = ResponseGenerator(
+            client=StubLLMClient(content=json.dumps({
+                "answer": "Your order is on its way. Thank you.",
+                "sources_used": [1, 2],
+            }))
+        )
+        result = gen.generate("query", CATEGORY, CONTEXT_DOCS)
+        assert result.sources == [1, 2]
+
+    def test_generate_result_empty_sources_when_none_used(self) -> None:
+        gen = ResponseGenerator(
+            client=StubLLMClient(content=json.dumps({
+                "answer": "I don't have that information. Thank you.",
+                "sources_used": [],
+            }))
+        )
+        result = gen.generate("query", CATEGORY, CONTEXT_DOCS)
+        assert result.sources == []
+
     def test_generate_tracks_token_usage(self) -> None:
         gen = ResponseGenerator(
-            client=StubLLMClient("answer [Source: 1]", tokens_used=42)
+            client=StubLLMClient(content=_VALID_RESPONSE, tokens_used=42)
         )
         result = gen.generate("query", CATEGORY, CONTEXT_DOCS)
         assert result.tokens_used == 42
@@ -60,29 +76,6 @@ class TestResponseGeneratorReturnsResult:
 
 
 @pytest.mark.unit
-class TestExtractCitations:
-    def test_extract_citations_finds_source_marker(self) -> None:
-        result = ResponseGenerator._extract_citations("See [Source: 1] for details.")
-        assert result == ["Source 1"]
-
-    def test_extract_citations_finds_multiple_markers(self) -> None:
-        result = ResponseGenerator._extract_citations("[Source: 1] and [Source: 2]")
-        assert result == ["Source 1", "Source 2"]
-
-    def test_extract_citations_deduplicates_repeated_markers(self) -> None:
-        result = ResponseGenerator._extract_citations("[Source: 1] also [Source: 1]")
-        assert result == ["Source 1"]
-
-    def test_extract_citations_returns_empty_list_when_no_markers(self) -> None:
-        result = ResponseGenerator._extract_citations("No citations here.")
-        assert result == []
-
-    def test_extract_citations_is_case_insensitive(self) -> None:
-        result = ResponseGenerator._extract_citations("[source: 1]")
-        assert result == ["Source 1"]
-
-
-@pytest.mark.unit
 class TestResponseGeneratorErrorHandling:
     def test_generate_raises_generation_error_on_empty_response(self) -> None:
         gen = ResponseGenerator(client=EmptyLLMClient())
@@ -92,4 +85,16 @@ class TestResponseGeneratorErrorHandling:
     def test_generate_raises_generation_error_on_llm_failure(self) -> None:
         gen = ResponseGenerator(client=FailingLLMClient())
         with pytest.raises(GenerationError, match="LLM call failed"):
+            gen.generate("query", CATEGORY, CONTEXT_DOCS)
+
+    def test_generate_raises_generation_error_on_malformed_json(self) -> None:
+        gen = ResponseGenerator(client=StubLLMClient(content="not valid json {{"))
+        with pytest.raises(GenerationError, match="not valid JSON"):
+            gen.generate("query", CATEGORY, CONTEXT_DOCS)
+
+    def test_generate_raises_generation_error_on_missing_answer_field(self) -> None:
+        gen = ResponseGenerator(
+            client=StubLLMClient(content=json.dumps({"sources_used": [1]}))
+        )
+        with pytest.raises(GenerationError, match="missing 'answer' field"):
             gen.generate("query", CATEGORY, CONTEXT_DOCS)

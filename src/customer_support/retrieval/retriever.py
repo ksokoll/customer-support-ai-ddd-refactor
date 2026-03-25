@@ -30,6 +30,9 @@ from customer_support.services.client import EmbeddingClient
 
 logger = logging.getLogger(__name__)
 
+_INDEX_FILENAME = "index.faiss"
+_TEXTS_FILENAME = "texts.json"
+
 
 # ── Protocol ──────────────────────────────────────────────────────────────────
 
@@ -54,7 +57,80 @@ class RetrieverProtocol(Protocol):
         ...
 
 
-# ── Shared FAISS helpers ───────────────────────────────────────────────────────
+# ── Shared helpers ────────────────────────────────────────────────────────────
+
+def _parse_qa_line(line: str) -> str:
+    """Parse a single JSONL line into a formatted Q&A string.
+
+    Args:
+        line: A single JSON line with "query" and "gold_answer" fields.
+
+    Returns:
+        Formatted string: "Q: ...\nA: ..."
+
+    Raises:
+        json.JSONDecodeError: If the line is not valid JSON.
+        KeyError: If required fields are missing.
+    """
+    qa = json.loads(line)
+    return f"Q: {qa['query']}\nA: {qa['gold_answer']}"
+
+
+def _parse_jsonl(raw: str) -> list[str]:
+    """Parse a multi-line JSONL string into a list of Q&A strings.
+
+    Skips blank lines and logs a warning for malformed entries.
+
+    Args:
+        raw: Full JSONL content as a string.
+
+    Returns:
+        List of formatted Q&A strings.
+
+    Raises:
+        RetrievalError: If no valid entries are found.
+    """
+    texts: list[str] = []
+    for lineno, line in enumerate(raw.strip().splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            texts.append(_parse_qa_line(line))
+        except (json.JSONDecodeError, KeyError) as exc:
+            logger.warning("Skipping malformed JSONL line %d: %s", lineno, exc)
+
+    if not texts:
+        raise RetrievalError("Knowledge base contains no valid Q&A entries.")
+
+    return texts
+
+
+def _build_faiss_index(
+    texts: list[str],
+    client: EmbeddingClient,
+) -> faiss.IndexFlatL2:
+    """Embed texts and build a FAISS IndexFlatL2.
+
+    Args:
+        texts: List of document strings to embed and index.
+        client: EmbeddingClient used to generate vectors.
+
+    Returns:
+        Populated FAISS index.
+
+    Raises:
+        RetrievalError: If embedding fails.
+    """
+    try:
+        vectors = client.embed(texts)
+    except Exception as exc:
+        raise RetrievalError(f"Failed to embed documents: {exc}") from exc
+
+    matrix = np.array(vectors, dtype=np.float32)
+    index = faiss.IndexFlatL2(matrix.shape[1])
+    index.add(matrix)
+    return index
+
 
 def _load_index(vector_db_path: str) -> tuple[faiss.IndexFlatL2, list[str]]:
     """Load FAISS index and parallel text list from disk.
@@ -69,8 +145,8 @@ def _load_index(vector_db_path: str) -> tuple[faiss.IndexFlatL2, list[str]]:
         RetrievalError: If index files are missing or cannot be loaded.
     """
     db_path = Path(vector_db_path)
-    index_path = db_path / "index.faiss"
-    texts_path = db_path / "texts.json"
+    index_path = db_path / _INDEX_FILENAME
+    texts_path = db_path / _TEXTS_FILENAME
 
     if not index_path.exists() or not texts_path.exists():
         raise RetrievalError(
@@ -171,25 +247,19 @@ class BlobRetriever:
     def __init__(self, embedding_client: EmbeddingClient) -> None:
         """Initialise BlobRetriever.
 
+        Validates Azure configuration upfront so the retriever fails fast
+        on startup rather than on the first retrieve() call.
+
         Args:
             embedding_client: Client used to embed documents and queries.
-                Must match the model used at store-build time if switching
-                from FAISSRetriever (same embedding skew risk applies).
-        """
-        self._client = embedding_client
-        self._index, self._texts = self._build_from_blob()
-
-    def _build_from_blob(self) -> tuple[faiss.IndexFlatL2, list[str]]:
-        """Download JSONL from Azure Blob and build an in-memory FAISS index.
-
-        Returns:
-            Tuple of (faiss index, list of document strings).
 
         Raises:
-            RetrievalError: If blob download or index construction fails.
+            RetrievalError: If azure-storage-blob is not installed or
+                required config values are missing.
         """
         try:
-            from azure.storage.blob import BlobServiceClient  # noqa: PLC0415
+            from azure.storage.blob import BlobServiceClient as _BlobServiceClient  # noqa: PLC0415
+            self._BlobServiceClient = _BlobServiceClient
         except ImportError as exc:
             raise RetrievalError(
                 "azure-storage-blob is not installed. "
@@ -202,41 +272,48 @@ class BlobRetriever:
                 "when ENABLE_BLOB_RETRIEVAL=true."
             )
 
+        self._client = embedding_client
+        self._index, self._texts = self._build_from_blob()
+
+    def _build_from_blob(self) -> tuple[faiss.IndexFlatL2, list[str]]:
+        """Orchestrate download, parse, and index build.
+
+        Returns:
+            Tuple of (faiss index, list of document strings).
+        """
+        raw = self._download_blob()
+        texts = _parse_jsonl(raw)
+        index = _build_faiss_index(texts, self._client)
+        logger.info("Built in-memory FAISS index with %d documents from blob", len(texts))
+        return index, texts
+
+    def _download_blob(self) -> str:
+        """Download the knowledge base JSONL from Azure Blob Storage.
+
+        Returns:
+            Raw JSONL content as a string.
+
+        Raises:
+            RetrievalError: If the download fails.
+        """
         try:
-            blob_service = BlobServiceClient.from_connection_string(
+            from azure.core.exceptions import AzureError  # noqa: PLC0415
+        except ImportError as exc:
+            raise RetrievalError("azure-core is not installed.") from exc
+
+        try:
+            blob_service = self._BlobServiceClient.from_connection_string(
                 settings.blob_connection_string
             )
             blob_client = blob_service.get_blob_client(
                 container=settings.blob_container_name,
                 blob=settings.knowledge_blob_name,
             )
-            raw = blob_client.download_blob().readall().decode("utf-8")
-        except Exception as exc:
-            raise RetrievalError(f"Failed to download knowledge base blob: {exc}") from exc
-
-        texts: list[str] = []
-        for line in raw.strip().splitlines():
-            if line.strip():
-                try:
-                    qa = json.loads(line)
-                    texts.append(f"Q: {qa['query']}\nA: {qa['gold_answer']}")
-                except (json.JSONDecodeError, KeyError) as exc:
-                    logger.warning("Skipping malformed JSONL line: %s", exc)
-
-        if not texts:
-            raise RetrievalError("Knowledge base blob is empty or contains no valid entries.")
-
-        try:
-            vectors = self._client.embed(texts)
-        except Exception as exc:
-            raise RetrievalError(f"Failed to embed knowledge base documents: {exc}") from exc
-
-        matrix = np.array(vectors, dtype=np.float32)
-        index = faiss.IndexFlatL2(matrix.shape[1])
-        index.add(matrix)
-
-        logger.info("Built in-memory FAISS index with %d documents from blob", len(texts))
-        return index, texts
+            return blob_client.download_blob().readall().decode("utf-8")
+        except AzureError as exc:
+            raise RetrievalError(
+                f"Failed to download knowledge base blob: {exc}"
+            ) from exc
 
     def retrieve(self, query: str, k: int = 3) -> list[str]:
         """Return top-k relevant documents for a query.

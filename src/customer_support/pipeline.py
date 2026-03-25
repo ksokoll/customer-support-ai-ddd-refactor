@@ -56,7 +56,7 @@ class PipelineResult(BaseModel):
     query: str
     category: str
     answer: str
-    sources: list[str] = Field(default_factory=list)
+    sources: list[int] = Field(default_factory=list)
     classification: IntentClassification
     generation: GeneratorResult
     quality: QualityResult

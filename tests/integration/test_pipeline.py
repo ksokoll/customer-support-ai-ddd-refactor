@@ -9,11 +9,9 @@ import json
 
 import pytest
 
-from customer_support.core.exceptions import GenerationError, QualityAssuranceError
+from customer_support.core.exceptions import GenerationError
 from customer_support.pipeline import Pipeline, PipelineResult
-from customer_support.retrieval.retriever import RetrieverProtocol
 from customer_support.services.client import CompletionRequest, CompletionResult
-
 
 # ── Stubs ─────────────────────────────────────────────────────────────────────
 
@@ -57,12 +55,14 @@ class MultiStepLLMClient:
                 "reasoning": "Customer asks about order location.",
             })
         elif self._call_count == 2:
-            # Generation
-            content = (
-                "Your order is on its way. You can track it by logging into "
-                "your account and visiting My Orders. [Source: 1] "
-                "Thank you for contacting StyleHub."
-            )
+            # Generation — structured JSON
+            content = json.dumps({
+                "answer": (
+                    "Your order is on its way. You can track it by logging into "
+                    "your account and visiting My Orders. Thank you for contacting StyleHub."
+                ),
+                "sources_used": [1],
+            })
         else:
             # AnswerJudge
             content = json.dumps({
@@ -107,10 +107,13 @@ class FailingJudgeLLMClient:
             )
         if self._call_count == 2:
             return CompletionResult(
-                content=(
-                    "Your order is on its way. You can track it by logging into "
-                    "your account and visiting My Orders. Thank you for contacting us."
-                ),
+                content=json.dumps({
+                    "answer": (
+                        "Your order is on its way. You can track it by logging into "
+                        "your account and visiting My Orders. Thank you for contacting us."
+                    ),
+                    "sources_used": [1],
+                }),
                 tokens_used=20,
             )
         raise RuntimeError("judge API failure")

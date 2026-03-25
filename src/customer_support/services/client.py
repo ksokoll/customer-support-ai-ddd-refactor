@@ -16,7 +16,6 @@ from typing import Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
 
-
 # ── Request / Result types ────────────────────────────────────────────────────
 
 class CompletionRequest(BaseModel):

@@ -41,11 +41,11 @@ class IntentClassifier:
                 malformed JSON.
         """
         request = CompletionRequest(
-            system=CLASSIFICATION_PROMPT,
+            system=CLASSIFICATION_PROMPT.prompt,
             user=query,
             temperature=settings.temperature_default,
             response_format={"type": "json_object"},
-            max_tokens=150,
+            max_tokens=settings.max_tokens_classification,
         )
 
         try:

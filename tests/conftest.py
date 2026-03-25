@@ -11,7 +11,6 @@ import pytest
 
 from customer_support.services.client import CompletionRequest, CompletionResult
 
-
 # ── Reusable LLM stubs ────────────────────────────────────────────────────────
 
 class StubLLMClient:
