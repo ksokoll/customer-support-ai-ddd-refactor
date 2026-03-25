@@ -1,5 +1,7 @@
 # Customer Support AI: DDD Refactor
 
+## Completed March 25., 2026
+
 A production-grade customer support pipeline built with Retrieval-Augmented Generation,
 LLM-as-Judge quality evaluation, and a Domain-Driven Design architecture.
 
