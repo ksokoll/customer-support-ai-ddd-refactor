@@ -1,7 +1,7 @@
 # ADR-002: Protocol-Based LLM and Embedding Client Abstraction
 
 Status: Accepted
-Date: 2025-XX-XX
+Date: 2025-03-03
 Deciders: Kevin Sokoll
 
 ## Context
