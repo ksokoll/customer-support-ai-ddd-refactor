@@ -1,7 +1,7 @@
 # ADR-003: RetrieverProtocol with FAISSRetriever and BlobRetriever
 
 Status: Accepted
-Date: 2025-XX-XX
+Date: 2025-03-10
 Deciders: Kevin Sokoll
 
 ## Context
